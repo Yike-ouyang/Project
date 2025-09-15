@@ -2,11 +2,35 @@
 <html>
 
 <head>
-    <title>Boucle Vélo</title>
+    <title>VéloLoop</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    
+
+    <link rel="icon" href="{{ url_for('static', filename='favicon.jpg') }}" type="image/x-icon">
+    <!-- autres liens et CSS -->
     <style>
+        #header {
+    display: flex;
+    align-items: center;       /* aligne verticalement titre et sous-titre */
+    justify-content: center;   /* centre horizontalement la ligne */
+    margin-bottom: 15px;
+    gap: 10px;                 /* espace entre titre et sous-titre */
+}
+
+#header h1 {
+    margin: 0;
+    font-size: 24px;
+    color: #333;
+}
+
+#header .subtitle {
+    margin: 0;
+    font-size: 14px;
+    color: #777;
+    font-weight: normal;
+}
         body {
             margin: 30;
             font-family: Arial, sans-serif;
@@ -19,9 +43,9 @@
         }
 
         #sidebar {
-            width: 300px;
+            width: 400px;
             background: #f7f7f7;
-            padding: 50px;
+            padding: 15px;
             box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
             overflow-y: auto;
             display: flex;
@@ -62,13 +86,19 @@
 <body>
     <div id="map"></div>
 
+   
+
     <div id="sidebar">
         <div id="controls">
+            <h3>VéloLoop</h3>
+            <h5>By Yike OUYANG</h5>
+
             <p>Clique sur la carte pour choisir le départ :</p>
             <input type="number" id="distance" placeholder="Distance km" />
             <button onclick="generateLoop()">Générer la boucle</button>
+            <button id="exportBtn" onclick="exportToGoogleMaps()">Lien Google Map</button>
         </div>
-        <button id="exportBtn" onclick="exportToGoogleMaps()">Lien Google Map</button>
+
         <div id="googleLinkContainer" style="margin: 10px 0;"></div>
 
         <div id="summary">Distance totale : 0 km, Durée estimée : 0 min</div>
@@ -88,10 +118,12 @@
         var startMarker;
         var routeLayer;
 
+
         map.on('click', function (e) {
             if (startMarker) map.removeLayer(startMarker);
             startMarker = L.marker(e.latlng).addTo(map).bindPopup("Point de départ").openPopup();
         });
+
 
         function generateLoop() {
             if (!startMarker) {
@@ -103,15 +135,18 @@
                 alert("Distance invalide");
                 return;
             }
+            let payload = {
+                lat: startMarker.getLatLng().lat,
+                lng: startMarker.getLatLng().lng,
+                distance: distance
+            };
+
+
 
             fetch('/generate_loop', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    lat: startMarker.getLatLng().lat,
-                    lng: startMarker.getLatLng().lng,
-                    distance: parseFloat(distance)
-                })
+                body: JSON.stringify(payload)
             })
                 .then(res => res.json())
                 .then(data => {
@@ -164,7 +199,7 @@
 
             let waypoints = simplified.map(c => `${c[1]},${c[0]}`);
 
-            
+
 
 
             if (waypoints.length < 2) {
