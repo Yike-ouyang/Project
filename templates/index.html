@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Boucle Vélo</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+        #map { height: 500px; width: 100%; }
+        body { font-family: Arial; margin: 20px; }
+    </style>
+</head>
+<body>
+    <h2>Générateur de boucle vélo</h2>
+    <p>Choisis un point de départ en cliquant sur la carte et entre la distance :</p>
+    <input type="number" id="distance" placeholder="Distance en km" />
+    <button onclick="generateLoop()">Générer la boucle</button>
+    <div id="map"></div>
+
+    <script>
+        var map = L.map('map').setView([48.8566, 2.3522], 13); // Paris par défaut
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        var startMarker;
+        var routeLayer;
+
+        map.on('click', function(e) {
+            if (startMarker) map.removeLayer(startMarker);
+            startMarker = L.marker(e.latlng).addTo(map).bindPopup("Point de départ").openPopup();
+        });
+
+        function generateLoop() {
+            if (!startMarker) {
+                alert("Clique sur la carte pour choisir le départ");
+                return;
+            }
+            var distance = document.getElementById('distance').value;
+            if (!distance || distance <= 0) {
+                alert("Distance invalide");
+                return;
+            }
+
+            fetch('/generate_loop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    lat: startMarker.getLatLng().lat,
+                    lng: startMarker.getLatLng().lng,
+                    distance: parseFloat(distance)
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    alert("Erreur: " + data.error);
+                    return;
+                }
+                if (routeLayer) map.removeLayer(routeLayer);
+                routeLayer = L.geoJSON(data).addTo(map);
+                map.fitBounds(routeLayer.getBounds());
+            });
+        }
+    </script>
+</body>
+</html>
