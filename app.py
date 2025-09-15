@@ -18,6 +18,11 @@ def generate_loop():
     start_lat = data.get('lat')
     start_lng = data.get('lng')
     distance_km = data.get('distance')
+    waypoint = data.get('waypoint')
+    coordinates = [[start_lng, start_lat]]
+    if waypoint:
+        # Ajouter le point intermédiaire en format [lng, lat]
+        coordinates.append([waypoint['lng'], waypoint['lat']])
 
     url = "https://api.openrouteservice.org/v2/directions/cycling-regular/geojson"
     headers = {
@@ -28,12 +33,14 @@ def generate_loop():
 
     # Paramètre round_trip pour créer une boucle
     payload = {
-        "coordinates": [[start_lng, start_lat]],
+        "coordinates": coordinates,
+        "continue_straight":True,
         "options": {
             "round_trip": {
                 "length": distance_km * 1000*1.2,  # longueur en mètres
                 "seed": random.randint(1, 100000),  # génère une boucle différente à chaque fois
-            "max_waypoints": 30
+               
+
             }
         },
         "instructions": True,
