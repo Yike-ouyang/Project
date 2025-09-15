@@ -1,12 +1,12 @@
 from flask import Flask, render_template, request, jsonify
 import requests
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
+import random
+load_dotenv()
+ORS_API_KEY = os.getenv("API_KEY")
 
 app = Flask(__name__)
-load_dotenv()
-# Remplace par ta clé ORS
-ORS_API_KEY = os.getenv("API_KEY")
 
 @app.route('/')
 def index():
@@ -19,27 +19,56 @@ def generate_loop():
     start_lng = data.get('lng')
     distance_km = data.get('distance')
 
-    # OpenRouteService "cycling-regular" profile
     url = "https://api.openrouteservice.org/v2/directions/cycling-regular/geojson"
     headers = {
         "Authorization": ORS_API_KEY,
         "Content-Type": "application/json"
     }
+  
 
-    # ORS a une option "round trip" (circuit)
+    # Paramètre round_trip pour créer une boucle
     payload = {
         "coordinates": [[start_lng, start_lat]],
         "options": {
             "round_trip": {
-                "length": distance_km * 1000  # ORS attend en mètres
+                "length": distance_km * 1000*1.2,  # longueur en mètres
+                "seed": random.randint(1, 100000),  # génère une boucle différente à chaque fois
+            "max_waypoints": 30
             }
-        }
+        },
+        "instructions": True,
+        "language":"fr",
+        "instructions_format": "text",
+        "units": "km",
+        "geometry_simplify": True
     }
 
     response = requests.post(url, json=payload, headers=headers)
 
     if response.status_code == 200:
-        return jsonify(response.json())
+        route_data = response.json()
+        # Extraire distance et durée totales
+        summary = route_data['features'][0]['properties']['summary']
+        distance = summary.get('distance', 0)
+        duration = summary.get('duration', 0)
+
+        # Extraire instructions
+        steps = route_data['features'][0]['properties']['segments'][0]['steps']
+        instructions = []
+        for step in steps:
+            if step['distance'] < 1:
+                dist = step['distance'] *1000
+                if dist > 10:
+                    instructions.append(f"{step['instruction']} ({dist} m )")
+            else:
+                instructions.append(f"{step['instruction']} ({step['distance']:.2f} km )")
+
+        return jsonify({
+            "geojson": route_data,
+            "distance": distance,
+            "duration": duration,
+            "instructions": instructions
+        })
     else:
         return jsonify({"error": response.text}), 400
 

@@ -1,24 +1,86 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Boucle Vélo</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <style>
-        #map { height: 500px; width: 100%; }
-        body { font-family: Arial; margin: 20px; }
+        body {
+            margin: 30;
+            font-family: Arial, sans-serif;
+            display: flex;
+            height: 100vh;
+        }
+
+        #map {
+            flex: 1;
+        }
+
+        #sidebar {
+            width: 300px;
+            background: #f7f7f7;
+            padding: 50px;
+            box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #summary {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        #instructions {
+            flex: 1;
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+        }
+
+        #instructions li {
+            margin-bottom: 8px;
+            padding: 5px;
+            background: #fff;
+            border-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        #controls {
+            margin-bottom: 10px;
+        }
+
+        #controls input {
+            width: 60px;
+            margin-right: 10px;
+        }
     </style>
 </head>
+
 <body>
-    <h2>Générateur de boucle vélo</h2>
-    <p>Choisis un point de départ en cliquant sur la carte et entre la distance :</p>
-    <input type="number" id="distance" placeholder="Distance en km" />
-    <button onclick="generateLoop()">Générer la boucle</button>
     <div id="map"></div>
 
+    <div id="sidebar">
+        <div id="controls">
+            <p>Clique sur la carte pour choisir le départ :</p>
+            <input type="number" id="distance" placeholder="Distance km" />
+            <button onclick="generateLoop()">Générer la boucle</button>
+        </div>
+        <button id="exportBtn" onclick="exportToGoogleMaps()">Lien Google Map</button>
+        <div id="googleLinkContainer" style="margin: 10px 0;"></div>
+
+        <div id="summary">Distance totale : 0 km, Durée estimée : 0 min</div>
+        <ul id="instructions"></ul>
+
+
+    </div>
+
+
+
     <script>
-        var map = L.map('map').setView([48.8566, 2.3522], 13); // Paris par défaut
+        var map = L.map('map').setView([48.8566, 2.3522], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap'
         }).addTo(map);
@@ -26,7 +88,7 @@
         var startMarker;
         var routeLayer;
 
-        map.on('click', function(e) {
+        map.on('click', function (e) {
             if (startMarker) map.removeLayer(startMarker);
             startMarker = L.marker(e.latlng).addTo(map).bindPopup("Point de départ").openPopup();
         });
@@ -51,17 +113,82 @@
                     distance: parseFloat(distance)
                 })
             })
-            .then(res => res.json())
-            .then(data => {
-                if (data.error) {
-                    alert("Erreur: " + data.error);
-                    return;
-                }
-                if (routeLayer) map.removeLayer(routeLayer);
-                routeLayer = L.geoJSON(data).addTo(map);
-                map.fitBounds(routeLayer.getBounds());
-            });
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        alert("Erreur: " + data.error);
+                        return;
+                    }
+
+                    // Afficher la route sur la carte
+                    if (routeLayer) map.removeLayer(routeLayer);
+                    routeLayer = L.geoJSON(data.geojson).addTo(map);
+                    map.fitBounds(routeLayer.getBounds());
+
+                    // Afficher résumé distance et durée
+                    let durationMin = (data.duration / 60).toFixed(2);
+                    document.getElementById('summary').innerText =
+                        `Distance totale : ${data.distance.toFixed(2)} km, Durée estimée : ${durationMin} min`;
+
+                    // Afficher instructions
+                    var instructionsList = document.getElementById('instructions');
+                    instructionsList.innerHTML = '';
+                    data.instructions.forEach(function (step) {
+                        var li = document.createElement('li');
+                        li.textContent = step;
+                        instructionsList.appendChild(li);
+                    });
+                });
         }
+        function simplifyCoordinates(coords, step = distance) {
+            let simplified = [];
+            for (let i = 0; i < coords.length; i += step) {
+                simplified.push(coords[i]);
+            }
+            // Toujours ajouter le dernier point (destination)
+            if (coords[coords.length - 1] !== simplified[simplified.length - 1]) {
+                simplified.push(coords[coords.length - 1]);
+            }
+            return simplified;
+        }
+
+        function exportToGoogleMaps() {
+            if (!routeLayer) {
+                alert("Générer d'abord un trajet !");
+                return;
+            }
+
+            // Extraire les coordonnées du GeoJSON
+            let coords = routeLayer.toGeoJSON().features[0].geometry.coordinates;
+            let simplified = simplifyCoordinates(coords, 20); // par ex. un point tous les 20
+
+            let waypoints = simplified.map(c => `${c[1]},${c[0]}`);
+
+            
+
+
+            if (waypoints.length < 2) {
+                alert("Pas assez de points pour exporter !");
+                return;
+            }
+
+            // Premier point = origine, dernier point = destination
+            let origin = waypoints[0];
+            let destination = waypoints[waypoints.length - 1];
+            let intermediate = waypoints.slice(1, -1).join('|');
+
+            // Créer l'URL
+            let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}`;
+            if (intermediate) url += `&waypoints=${intermediate}`;
+            url += `&travelmode=bicycling`;
+
+
+
+            const container = document.getElementById('googleLinkContainer');
+            container.innerHTML = `<a href="${url}" target="_blank">Ouvrir dans Google Maps</a>`;
+        }
+
     </script>
 </body>
+
 </html>
